@@ -4,6 +4,7 @@ use std::io::{self, BufRead};
 use std::ops::Deref;
 use std::path::Path;
 use std::rc::Rc;
+use std::vec;
 use scanf::sscanf;
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>> where P: AsRef<Path> {
@@ -12,7 +13,7 @@ fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>> wher
 }
 
 fn read() -> Vec<String> {
-    let file_path = "/Users/ecem/CLionProjects/adventofcode2022/day07/day7.txt";
+    let file_path = "/Users/ecem/CLionProjects/adventofcode2022/day10/day10.txt";
     let Ok(lines) = read_lines(file_path) else {
         return vec!();
     };
@@ -20,106 +21,80 @@ fn read() -> Vec<String> {
     return lines.into_iter().map(|x| x.unwrap()).collect();
 }
 
-fn parse(line: &str) -> (usize, usize, usize) {
-    let mut count :usize = 0;
-    let mut from :usize = 0;
-    let mut to :usize = 0;
-
-    // move 1 from 5 to 6
-    let Ok(_) = sscanf!(&line, "move {} from {} to {}", count, from, to) else {
-        panic!("Line does not match");
-    };
-    (count, from, to)
-}
-
-struct Dir<'a>
-{
-    name: &'a str,
-    files: Vec<(String, i64)>,
-    dirs: Vec<Rc<RefCell<Dir<'a>>>>
-}
-
 
 fn part1() {
+    let mut result = 0;
+    let mut x = 1;
+    let mut cycle = 0;
+    let mut next_cycle = 20;
 
-    let mut stack = vec![Rc::new(RefCell::new(Dir{name:"/", files: vec![], dirs: vec![] }))];
-    let lines = read();
-    for line in lines {
-
+    for line in read() {
         let tokens = line.split(' ').collect::<Vec<&str>>();
 
         match tokens[0] {
-            "$" => {
-                match tokens[1] {
-                    "cd" => {
-                        match tokens[2] {
-                            "/" => { stack.drain(1..stack.len()); }
-                            ".." => { stack.pop(); }
-                            dirname => {
-                                let last_ptr = stack.last().unwrap().clone();
-                                let last = last_ptr.borrow();
-                                let mut found = last.dirs.iter().find(|x| {
-                                    x.borrow().name==dirname
-                                }).unwrap();
-                                stack.push(found.clone());
-                            }
-                        };
-                    }
-                    "ls" => {
-                        let last_ptr = stack.last().unwrap().clone();
-                        let mut last = last_ptr.borrow_mut();
-                        last.files.clear();
-                        last.dirs.clear();
-                    }
-                    c => panic!("unknown command {}", c)
+            "addx" => {
+                let value = tokens[1].parse::<i32>().unwrap();
+                cycle += 2;
+                if next_cycle <= cycle {
+                    result += next_cycle * x;
+                    next_cycle += 40;
+                }
+
+                x += value;
+            }
+            "noop" => {
+                cycle += 1;
+                if next_cycle <= cycle {
+                    result += next_cycle * x;
+                    next_cycle += 40;
                 }
             }
-            "dir" => {
-                let last_ptr = stack.last().unwrap().clone();
-                let mut last = last_ptr.borrow_mut();
-                last.dirs.push(Rc::new(RefCell::new(Dir{name:tokens[1], files: vec![], dirs: vec![] })));
-            }
-            filename => {
-                let last_ptr = stack.last().unwrap().clone();
-                let mut last = last_ptr.borrow_mut();
-                last.files.push((filename.parse().unwrap(), tokens[1].parse::<i64>().unwrap()));
-            }
+            op => panic!("unknown command {}", op)
         }
-
-        // for _ in 0..count {
-        //     let c = stacks[from].pop().unwrap();
-        //     stacks[to].push(c);
-        // }
     }
 
-    // let mut result = String::new();
-    // for i in 1..stacks.len() {
-    //     result.push(stacks[i].chars().last().unwrap());
-    // }
-
-    println!("Part1: {}", 1)
+    println!("Part1: {}", result)
 }
 
-fn part2(input: &Vec<&str>) {
+fn check(x: i32, cycle: &mut i32, crt: &mut Vec<char>) {
+    let c = *cycle;
+    if x - 1 <= (c % 40) && (c % 40) <= x + 1 {
+        crt[c as usize] = '#';
+    }
+    *cycle += 1;
+}
 
-    let mut stacks: Vec<String> = input.iter().map(|&x| x.into()).collect();
+fn part2() {
+    let mut x = 1;
+    let mut cycle = 0;
+    let mut crt = vec![' '; 240];
 
-    for x in read() {
-        let (count,from,to) = parse(&*x);
+    for line in read() {
+        let tokens = line.split(' ').collect::<Vec<&str>>();
 
-        let len = stacks[from].len();
-        let s = stacks[from].drain(len-count..len).collect::<String>();
-        stacks[to].push_str(&*s);
+        match tokens[0] {
+            "addx" => {
+                let value = tokens[1].parse::<i32>().unwrap();
+                check(x, &mut cycle, &mut crt);
+                check(x, &mut cycle, &mut crt);
+                x += value;
+            }
+            "noop" => {
+                check(x, &mut cycle, &mut crt);
+            }
+            op => panic!("unknown command {}", op)
+        }
     }
 
-    let result = stacks[1..stacks.len()].iter().map(|x| x.chars().last().unwrap()).collect::<String>();
-    println!("Part2: {}", result)
+    println!("Part2:");
+    for chunk in crt.chunks(40) {
+        println!("{}", chunk.iter().collect::<String>())
+    }
 }
 
 fn main() {
-
     part1();
-    //part2(&stacks);
+    part2();
 }
 
 
