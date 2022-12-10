@@ -7,7 +7,7 @@
 #include <sstream>
 
 auto read() {
-    std::fstream ifs("/Users/ecem/CLionProjects/adventofcode2022/day04/day4.txt");
+    std::fstream ifs(std::string(SRC_DIR)+"/input.txt");
     std::string line;
     std::vector<std::string> result;
     while (std::getline(ifs, line)) {

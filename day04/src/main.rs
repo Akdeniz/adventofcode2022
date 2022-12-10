@@ -9,7 +9,7 @@ fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>> wher
 }
 
 fn read() -> Vec<String> {
-    let file_path = "/Users/ecem/CLionProjects/adventofcode2022/day04/day4.txt";
+    let file_path = "input.txt";
     let Ok(lines) = read_lines(file_path) else {
         return vec!();
     };

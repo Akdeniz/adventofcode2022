@@ -6,7 +6,7 @@
 
 int main() {
 
-    std::fstream ifs("/Users/ecem/CLionProjects/adventofcode2022/day01/day1.txt");
+    std::fstream ifs(std::string(SRC_DIR)+"/input.txt");
     std::string line;
 
     std::vector<int64_t> sums = {0};

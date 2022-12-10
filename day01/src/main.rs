@@ -4,7 +4,7 @@ use std::path::Path;
 
 fn main() {
 
-    let file_path = "/Users/ecem/CLionProjects/adventofcode2022/day01/day1.txt";
+    let file_path = "input.txt";
 
     let mut sums : Vec<i64> = vec![0];
     if let Ok(lines) = read_lines(file_path) {

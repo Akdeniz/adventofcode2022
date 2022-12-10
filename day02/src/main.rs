@@ -40,7 +40,7 @@ fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>> wher
 }
 
 fn read_moves() -> Vec<(Move, Move)> {
-    let file_path = "/Users/ecem/CLionProjects/adventofcode2022/day02/day2.txt";
+    let file_path = "input.txt";
     let mut moves : Vec<(Move, Move)> = vec!();
     let Ok(lines) = read_lines(file_path) else {
         return moves;
