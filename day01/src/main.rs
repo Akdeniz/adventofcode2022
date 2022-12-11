@@ -21,7 +21,7 @@ fn main() {
 
     sums.sort_by(|a,b| b.cmp(a));
     println!("Part1: {}", sums.first().unwrap());
-    println!("Part2: {}", sums[0..3].iter().sum::<i64>());
+    println!("Part2: {}", sums.iter().take(3).sum::<i64>());
 }
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>> where P: AsRef<Path> {

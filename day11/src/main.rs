@@ -12,18 +12,13 @@ use scanf::sscanf;
 use crate::Value::{IntVal, OldVal};
 use lazy_static::lazy_static;
 
-fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>> where P: AsRef<Path> {
-    let file = File::open(filename)?;
-    Ok(io::BufReader::new(file).lines())
+fn read_all() -> String {
+    let file_path = "input.txt";
+    std::fs::read_to_string(file_path).unwrap()
 }
 
-fn read() -> Vec<String> {
-    let file_path = "input.txt";
-    let Ok(lines) = read_lines(file_path) else {
-        return vec!();
-    };
-
-    return lines.into_iter().map(|x| x.unwrap()).collect();
+fn read_lines() -> Vec<String> {
+    read_all().split('\n').map(|x| x.parse().unwrap()).collect::<Vec<String>>()
 }
 
 enum Value {
@@ -64,7 +59,7 @@ r#"Monkey ([0-9]+):
 \s*If false: throw to monkey (?P<false>[0-9]+)"#).unwrap();
     }
 
-    let text = read().join("\n");
+    let text = read_all();
 
     let mut monkeys: Vec<Monkey> = vec![];
     for cap in RE.captures_iter(&*text) {
@@ -174,7 +169,7 @@ fn part2() {
     times.sort_by(|a, b| b.cmp(a));
 
     let result = times[0..2].iter().cloned().reduce(|accum, x| accum * x).unwrap();
-    println!("Part2: {}", result)
+    println!("Part2: {}", result);
 }
 
 
