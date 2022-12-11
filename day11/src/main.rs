@@ -1,11 +1,15 @@
 use std::cell::RefCell;
+use std::cmp::Ordering;
+use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::ops::Deref;
 use std::path::Path;
 use std::rc::Rc;
 use std::vec;
+use regex::Regex;
 use scanf::sscanf;
+use crate::Value::{IntVal, OldVal};
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>> where P: AsRef<Path> {
     let file = File::open(filename)?;
@@ -21,76 +25,147 @@ fn read() -> Vec<String> {
     return lines.into_iter().map(|x| x.unwrap()).collect();
 }
 
+enum Value {
+    IntVal(i64),
+    OldVal,
+}
+
+struct Monkey {
+    items: Vec<i64>,
+    op: (String, Value),
+    test_div: i64,
+    test_true: i64,
+    test_false: i64,
+    inspection_times: usize,
+}
+
+impl Monkey {
+    fn new() -> Monkey {
+        Monkey {
+            items: Default::default(),
+            op: ("+".parse().unwrap(), Value::OldVal),
+            test_div: 0,
+            test_true: 0,
+            test_false: 0,
+            inspection_times: 0,
+        }
+    }
+}
+
+fn parse() -> Vec<Monkey> {
+    let re = Regex::new(r"Monkey ([0-9]+):\n  Starting items: ([0-9, ]+)\n  Operation: new = old ([*+]) ([0-9]+|old)\n  Test: divisible by ([0-9]+)\n    If true: throw to monkey ([0-9]+)\n    If false: throw to monkey ([0-9]+)").unwrap();
+    let text = read().join("\n");
+
+    let mut monkeys: Vec<Monkey> = vec![];
+    for cap in re.captures_iter(&*text) {
+        let mut monkey = Monkey::new();
+        monkey.items = cap[2].split(',').map(|x| x.trim().parse::<i64>().unwrap()).collect::<Vec<i64>>();
+        match &cap[4] {
+            "old" => {
+                monkey.op = (cap[3].parse().unwrap(), OldVal);
+            }
+            intval => {
+                monkey.op = (cap[3].parse().unwrap(), IntVal(intval.parse::<i64>().unwrap()));
+            }
+        }
+
+        monkey.test_div = cap[5].parse::<i64>().unwrap();
+        monkey.test_true = cap[6].parse::<i64>().unwrap();
+        monkey.test_false = cap[7].parse::<i64>().unwrap();
+
+        monkeys.push(monkey);
+    }
+    monkeys
+}
 
 fn part1() {
-    let mut result = 0;
-    let mut x = 1;
-    let mut cycle = 0;
-    let mut next_cycle = 20;
-
-    for line in read() {
-        let tokens = line.split(' ').collect::<Vec<&str>>();
-
-        match tokens[0] {
-            "addx" => {
-                let value = tokens[1].parse::<i32>().unwrap();
-                cycle += 2;
-                if next_cycle <= cycle {
-                    result += next_cycle * x;
-                    next_cycle += 40;
+    let mut monkeys = parse();
+    for _ in 0..20 {
+        for idx in 0..monkeys.len() {
+            monkeys[idx].inspection_times += monkeys[idx].items.len();
+            let items = monkeys[idx].items.drain(..).collect::<Vec<i64>>();
+            for mut item in items {
+                match (monkeys[idx].op.0.as_str(), &monkeys[idx].op.1) {
+                    ("*", OldVal) => {
+                        item *= item;
+                    }
+                    ("+", OldVal) => {
+                        item += item;
+                    }
+                    ("*", IntVal(x)) => {
+                        item *= x;
+                    }
+                    ("+", IntVal(x)) => {
+                        item += x;
+                    }
+                    (_, _) => panic!("Invalid operation")
                 }
 
-                x += value;
-            }
-            "noop" => {
-                cycle += 1;
-                if next_cycle <= cycle {
-                    result += next_cycle * x;
-                    next_cycle += 40;
+                item /= 3;
+
+                let dest_idx;
+                if item % monkeys[idx].test_div == 0 {
+                    dest_idx = monkeys[idx].test_true;
+                } else {
+                    dest_idx = monkeys[idx].test_false;
                 }
+                monkeys[dest_idx as usize].items.push(item);
             }
-            op => panic!("unknown command {}", op)
         }
     }
 
+    let mut times = monkeys.iter().map(|x| x.inspection_times).collect::<Vec<usize>>();
+    times.sort_by(|a, b| b.cmp(a));
+
+    let result = times[0] * times[1];
     println!("Part1: {}", result)
 }
 
-fn check(x: i32, cycle: &mut i32, crt: &mut Vec<char>) {
-    let c = *cycle;
-    if x - 1 <= (c % 40) && (c % 40) <= x + 1 {
-        crt[c as usize] = '#';
-    }
-    *cycle += 1;
-}
-
 fn part2() {
-    let mut x = 1;
-    let mut cycle = 0;
-    let mut crt = vec![' '; 240];
+    let mut monkeys = parse();
 
-    for line in read() {
-        let tokens = line.split(' ').collect::<Vec<&str>>();
+    let master_mod = monkeys.iter().map(|x| x.test_div).reduce(|accum, x| accum * x).unwrap();
 
-        match tokens[0] {
-            "addx" => {
-                let value = tokens[1].parse::<i32>().unwrap();
-                check(x, &mut cycle, &mut crt);
-                check(x, &mut cycle, &mut crt);
-                x += value;
+    for _ in 0..10000 {
+        for idx in 0..monkeys.len() {
+            monkeys[idx].inspection_times += monkeys[idx].items.len();
+            let items = monkeys[idx].items.drain(..).collect::<Vec<i64>>();
+            for mut item in items {
+                item = item % master_mod + master_mod;
+                match (monkeys[idx].op.0.as_str(), &monkeys[idx].op.1) {
+                    ("*", OldVal) => {
+                        item *= item;
+                    }
+                    ("+", OldVal) => {
+                        item += item;
+                    }
+                    ("*", IntVal(x)) => {
+                        item *= x;
+                    }
+                    ("+", IntVal(x)) => {
+                        item += x;
+                    }
+                    (_, _) => panic!("Invalid operation")
+                }
+
+                let dest_idx;
+                if item % monkeys[idx].test_div == 0 {
+                    dest_idx = monkeys[idx].test_true;
+                } else {
+                    dest_idx = monkeys[idx].test_false;
+                }
+                monkeys[dest_idx as usize].items.push(item);
             }
-            "noop" => {
-                check(x, &mut cycle, &mut crt);
-            }
-            op => panic!("unknown command {}", op)
         }
     }
 
-    println!("Part2:");
-    for chunk in crt.chunks(40) {
-        println!("{}", chunk.iter().collect::<String>())
-    }
+    let mut times = monkeys.iter().map(|x| x.inspection_times).collect::<Vec<usize>>();
+    times.sort_by(|a, b| b.cmp(a));
+
+    let result = times[0] * times[1];
+    println!("Part2: {}", result)
 }
+
 
 fn main() {
     part1();
