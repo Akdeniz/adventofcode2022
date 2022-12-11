@@ -10,6 +10,7 @@ use std::vec;
 use regex::Regex;
 use scanf::sscanf;
 use crate::Value::{IntVal, OldVal};
+use lazy_static::lazy_static;
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>> where P: AsRef<Path> {
     let file = File::open(filename)?;
@@ -43,7 +44,7 @@ impl Monkey {
     fn new() -> Monkey {
         Monkey {
             items: Default::default(),
-            op: ("+".parse().unwrap(), Value::OldVal),
+            op: ("+".parse().unwrap(), OldVal),
             test_div: 0,
             test_true: 0,
             test_false: 0,
@@ -53,25 +54,35 @@ impl Monkey {
 }
 
 fn parse() -> Vec<Monkey> {
-    let re = Regex::new(r"Monkey ([0-9]+):\n  Starting items: ([0-9, ]+)\n  Operation: new = old ([*+]) ([0-9]+|old)\n  Test: divisible by ([0-9]+)\n    If true: throw to monkey ([0-9]+)\n    If false: throw to monkey ([0-9]+)").unwrap();
+     lazy_static! {
+        static ref RE: Regex = Regex::new(
+r#"Monkey ([0-9]+):
+\s*Starting items: (?P<items>[0-9, ]+)
+\s*Operation: new = old (?P<op>[*+]) (?P<value>[0-9]+|old)
+\s*Test: divisible by (?P<div>[0-9]+)
+\s*If true: throw to monkey (?P<true>[0-9]+)
+\s*If false: throw to monkey (?P<false>[0-9]+)"#).unwrap();
+    }
+
     let text = read().join("\n");
 
     let mut monkeys: Vec<Monkey> = vec![];
-    for cap in re.captures_iter(&*text) {
+    for cap in RE.captures_iter(&*text) {
         let mut monkey = Monkey::new();
-        monkey.items = cap[2].split(',').map(|x| x.trim().parse::<i64>().unwrap()).collect::<Vec<i64>>();
-        match &cap[4] {
-            "old" => {
+        monkey.items = cap.name("items").unwrap().split(',').map(|x| x.trim().parse::<i64>().unwrap()).collect::<Vec<i64>>();
+        match cap.name("value") {
+            Some("old") => {
                 monkey.op = (cap[3].parse().unwrap(), OldVal);
             }
-            intval => {
+            Some(intval) => {
                 monkey.op = (cap[3].parse().unwrap(), IntVal(intval.parse::<i64>().unwrap()));
             }
+            _ => panic!("Unknown operation")
         }
 
-        monkey.test_div = cap[5].parse::<i64>().unwrap();
-        monkey.test_true = cap[6].parse::<i64>().unwrap();
-        monkey.test_false = cap[7].parse::<i64>().unwrap();
+        monkey.test_div = cap.name("div").unwrap().parse::<i64>().unwrap();
+        monkey.test_true = cap.name("true").unwrap().parse::<i64>().unwrap();
+        monkey.test_false = cap.name("false").unwrap().parse::<i64>().unwrap();
 
         monkeys.push(monkey);
     }
@@ -117,7 +128,7 @@ fn part1() {
     let mut times = monkeys.iter().map(|x| x.inspection_times).collect::<Vec<usize>>();
     times.sort_by(|a, b| b.cmp(a));
 
-    let result = times[0] * times[1];
+    let result = times[0..2].iter().cloned().reduce(|accum, x| accum * x).unwrap();
     println!("Part1: {}", result)
 }
 
@@ -162,7 +173,7 @@ fn part2() {
     let mut times = monkeys.iter().map(|x| x.inspection_times).collect::<Vec<usize>>();
     times.sort_by(|a, b| b.cmp(a));
 
-    let result = times[0] * times[1];
+    let result = times[0..2].iter().cloned().reduce(|accum, x| accum * x).unwrap();
     println!("Part2: {}", result)
 }
 
