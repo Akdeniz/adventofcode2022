@@ -137,7 +137,7 @@ fn part2() {
             monkeys[idx].inspection_times += monkeys[idx].items.len();
             let items = monkeys[idx].items.drain(..).collect::<Vec<i64>>();
             for mut item in items {
-                item = item % master_mod + master_mod;
+                item = item % master_mod;
                 match (monkeys[idx].op.0.as_str(), &monkeys[idx].op.1) {
                     ("*", OldVal) => {
                         item *= item;
