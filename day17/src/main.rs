@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::{HashMap, VecDeque, HashSet};
@@ -20,140 +21,160 @@ fn read_lines() -> Vec<String> {
     read_all().split('\n').map(|x| x.parse().unwrap()).collect::<Vec<String>>()
 }
 
-fn parse(input: &str) -> Vec<(i32,i32)> {
-    lazy_static! {
-        static ref RE: Regex = Regex::new(r#"(?P<y>[0-9]+),(?P<x>[0-9]+)"#).unwrap();
-    }
-
-    let mut result: Vec<(i32,i32)> = vec![];
-    for cap in RE.captures_iter(input) {
-
-        let x = cap.name("x").unwrap().parse::<i32>().unwrap();
-        let y = cap.name("y").unwrap().parse::<i32>().unwrap();
-        result.push((x,y));
-    }
-    result
+struct Direction {
+    data: Vec<char>,
+    idx: usize
 }
 
-fn drop_sand(walls: &mut HashSet<(i32, i32)>, lowest: i32) -> bool {
-    let mut sand = (0,500);
-
-    while sand.0 <= lowest {
-        if !walls.contains(&(sand.0 + 1, sand.1)) {
-            sand = (sand.0 + 1, sand.1);
-        } else if !walls.contains(&(sand.0 + 1, sand.1 - 1)) {
-            sand = (sand.0 + 1, sand.1 - 1);
-        } else if !walls.contains(&(sand.0 + 1, sand.1 + 1)) {
-            sand = (sand.0 + 1, sand.1 + 1);
-        } else {
-            walls.insert(sand);
-            return true;
+impl Direction {
+    fn new() -> Direction
+    {
+        Direction {
+            data: read_lines().first().unwrap().chars().collect(),
+            idx: 0,
         }
     }
-    false
+    fn next(&mut self) -> char {
+        let ch = self.data[self.idx];
+        self.idx=(self.idx+1) % self.data.len();
+        ch
+    }
+}
+
+/*
+####  .#.  ..#  #  ##
+      ###  ..#  #  ##
+      .#.  ###  #
+                #
+*/
+struct Offset {
+    data: Vec<Vec<(i64, i64)>>,
+    idx: usize
+}
+
+impl Offset {
+    fn new() -> Offset {
+        Offset{
+            data: vec![
+                vec![(0, 0),(0, 1),(0, 2),(0, 3)],
+                vec![(0, 1),(1, 0),(1, 1),(1, 2),(2, 1)],
+                vec![(0, 0),(0, 1),(0, 2),(1, 2),(2, 2)],
+                vec![(0, 0),(1, 0),(2, 0),(3, 0)],
+                vec![(0, 0),(0, 1),(1, 0),(1, 1)],
+            ],
+            idx:0
+        }
+    }
+
+    fn next(&mut self) -> &Vec<(i64, i64)> {
+        let ch = &self.data[self.idx];
+        self.idx=(self.idx+1) % self.data.len();
+        ch
+    }
+}
+
+struct Shape<'a> {
+    offset: &'a Vec<(i64, i64)>,
+    pos: (i64, i64) // left bottom
+}
+
+impl<'a> Shape<'a> {
+    fn go(&mut self, points: &HashSet<(i64,i64)>, xdiff:i64, ydiff:i64) -> bool {
+
+        for off in self.offset {
+            let rpos = (off.0 + self.pos.0 + xdiff, off.1 + self.pos.1 + ydiff);
+            if rpos.1 < 0 || rpos.1 >= 7 || rpos.0 < 0 || points.contains(&rpos) {
+                return false;
+            }
+        }
+        self.pos.0+=xdiff;
+        self.pos.1+=ydiff;
+        return true
+    }
+
+    fn positions(&self) -> Vec<(i64, i64)> {
+        return self.offset.iter().map(|x| (x.0+self.pos.0, x.1+self.pos.1)).collect();
+    }
+}
+
+fn simulate_drop(direction:&mut Direction, shape:&mut Shape, points: &HashSet<(i64,i64)>) {
+    loop {
+        match direction.next() {
+            '>' => { shape.go(points, 0, 1); }
+            '<' => { shape.go(points, 0, -1); }
+            _ => panic!("unknown direction character")
+        }
+        if !shape.go(points, -1, 0) {
+            break;
+        }
+    }
+}
+
+fn calculate_max_height(count: usize) -> i64 {
+    let mut points : HashSet<(i64,i64)> = HashSet::new();
+    let mut direction = Direction::new();
+    let mut offset = Offset::new();
+    let mut max_height = -1i64;
+
+    for _ in 0..count {
+        let mut shape = Shape{ offset: offset.next(), pos: (max_height + 4, 2) };
+        simulate_drop(&mut direction, &mut shape, &points);
+
+        for pos in shape.positions() {
+            max_height = max_height.max(pos.0 as i64);
+            points.insert(pos);
+        }
+    }
+    max_height + 1
 }
 
 fn part1() {
-    let lines = read_lines().into_iter().filter(|x| !x.is_empty()).collect::<Vec<String>>();
-
-    let mut walls :HashSet<(i32, i32)> = HashSet::new();
-    for line in lines {
-        let positions = parse(line.as_str());
-        for i in 1..positions.len() {
-            let deltax = match positions[i-1].0.cmp(&positions[i].0) {
-                Ordering::Less => 1,
-                Ordering::Equal => 0,
-                Ordering::Greater => -1
-            };
-            let deltay = match positions[i-1].1.cmp(&positions[i].1) {
-                Ordering::Less => 1,
-                Ordering::Equal => 0,
-                Ordering::Greater => -1
-            };
-
-            let mut from = positions[i-1];
-            while from!=positions[i] {
-                walls.insert(from);
-                from = (from.0+deltax, from.1+deltay);
-            }
-            walls.insert(positions[i]);
-        }
-    }
-
-    let lowest = walls.iter().map(|x| x.0).reduce(|x,y| x.max(y)).unwrap();
-
-    let mut result = 0;
-    while drop_sand(&mut walls, lowest) {
-        result+=1;
-    }
-
-    println!("Part1: {}", result);
+    println!("Part1: {}", calculate_max_height(2022));
 }
 
-fn drop_sand_2(walls: &mut HashSet<(i32, i32)>, base: i32) -> bool {
-    let mut sand = (0,500);
+fn find_pattern() -> (i64, i64, i64) {
+    let mut points : HashSet<(i64,i64)> = HashSet::new();
+    let mut direction = Direction::new();
+    let mut offset = Offset::new();
+    let mut max_height = -1i64;
+    let mut maxincols = [-1i64, -1, -1, -1, -1, -1, -1];
+    let mut birdseye = [0i64, 0, 0, 0, 0, 0, 0];
 
-    if walls.contains(&sand) {
-        return false;
-    }
+    let mut cache : HashMap<([i64;7],usize,usize),(i64, i64)> = HashMap::new();
+    cache.insert((birdseye, direction.idx, offset.idx), (-1, max_height));
 
-    while true {
+    for i in 0.. {
+        let mut shape = Shape{ offset: offset.next(), pos: (max_height + 4, 2) };
+        simulate_drop(&mut direction, &mut shape, &points);
 
-        if base == sand.0 + 1 {
-            walls.insert(sand);
-            return true;
+        for pos in shape.positions() {
+            max_height = max_height.max(pos.0 as i64);
+            maxincols[pos.1 as usize] = maxincols[pos.1 as usize].max(pos.0);
+            points.insert(pos);
         }
 
-        if !walls.contains(&(sand.0 + 1, sand.1)) {
-            sand = (sand.0 + 1, sand.1);
-        } else if !walls.contains(&(sand.0 + 1, sand.1 - 1)) {
-            sand = (sand.0 + 1, sand.1 - 1);
-        } else if !walls.contains(&(sand.0 + 1, sand.1 + 1)) {
-            sand = (sand.0 + 1, sand.1 + 1);
-        } else {
-            walls.insert(sand);
-            return true;
+        for k in 0..birdseye.len() {
+            birdseye[k] = max_height - maxincols[k]
         }
+
+        if let Some(prev) = cache.get(&(birdseye, direction.idx, offset.idx)) {
+            return (prev.0, i - prev.0, max_height - prev.1);
+        }
+        cache.insert((birdseye, direction.idx, offset.idx), (i, max_height));
     }
-    false
+    panic!("can not reach here");
 }
 
 fn part2() {
-    let lines = read_lines().into_iter().filter(|x| !x.is_empty()).collect::<Vec<String>>();
+    let count = 1000000000000i64;
+    let pattern = find_pattern();
+    let iterate  = (pattern.0 + (count - pattern.0) % pattern.1) as usize;
+    let pattern_count = (count-pattern.0) / pattern.1;
+    let result = pattern.2 * pattern_count;
 
-    let mut walls :HashSet<(i32, i32)> = HashSet::new();
-    for line in lines {
-        let positions = parse(line.as_str());
-        for i in 1..positions.len() {
-            let deltax = match positions[i-1].0.cmp(&positions[i].0) {
-                Ordering::Less => 1,
-                Ordering::Equal => 0,
-                Ordering::Greater => -1
-            };
-            let deltay = match positions[i-1].1.cmp(&positions[i].1) {
-                Ordering::Less => 1,
-                Ordering::Equal => 0,
-                Ordering::Greater => -1
-            };
-
-            let mut from = positions[i-1];
-            while from!=positions[i] {
-                walls.insert(from);
-                from = (from.0+deltax, from.1+deltay);
-            }
-            walls.insert(positions[i]);
-        }
-    }
-
-    let lowest = walls.iter().map(|x| x.0).reduce(|x,y| x.max(y)).unwrap();
-
-    let mut result = 0;
-    while drop_sand_2(&mut walls, lowest+2) {
-        result+=1;
-    }
-
-    println!("Part2: {}", result);
+    println!("Part2: {}", result + calculate_max_height(iterate));
 }
+
 
 fn main() {
     part1();
