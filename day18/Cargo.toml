@@ -1,5 +1,5 @@
 [package]
-name = "day17"
+name = "day18"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,3 +9,4 @@ edition = "2021"
 scanf = "1.2.1"
 regex = "0.1.41"
 lazy_static = "*"
+itertools = "*"
