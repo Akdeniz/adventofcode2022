@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::{HashMap, VecDeque, HashSet};
@@ -7,7 +9,7 @@ use std::ops::Deref;
 use std::path::Path;
 use std::rc::Rc;
 use std::vec;
-use regex::Regex;
+use regex::{Captures, Regex};
 use scanf::sscanf;
 use lazy_static::lazy_static;
 
@@ -17,139 +19,177 @@ fn read_all() -> String {
 }
 
 fn read_lines() -> Vec<String> {
-    read_all().split('\n').map(|x| x.parse().unwrap()).collect::<Vec<String>>()
+    read_all().split('\n').map(|x| x.parse().unwrap()).filter(|x: &String| !x.is_empty()).collect()
 }
 
-fn parse(input: &str) -> Vec<(i32,i32)> {
+struct Node {
+    rate: i64,
+    from: String,
+    tos: Vec<String>,
+}
+
+fn parse(input: &str) -> Node {
     lazy_static! {
-        static ref RE: Regex = Regex::new(r#"(?P<y>[0-9]+),(?P<x>[0-9]+)"#).unwrap();
+        static ref BASE_RE: Regex = Regex::new(r#"Valve (?P<from>[A-Z]+) has flow rate=(?P<rate>[0-9]+); tunnels? leads? to valves? (?P<tos>[A-Z ,]+)"#).unwrap();
+        static ref VALVE_RE: Regex = Regex::new(r#"(?P<to>[A-Z]+)"#).unwrap();
     }
 
-    let mut result: Vec<(i32,i32)> = vec![];
-    for cap in RE.captures_iter(input) {
+    match BASE_RE.captures(input) {
+        Some(cap) => {
+            return Node {
+                rate: cap.name("rate").unwrap().parse::<i64>().unwrap(),
+                from: cap.name("from").unwrap().to_string(),
+                tos: VALVE_RE.captures_iter(cap.name("tos").unwrap()).map(|x| x.name("to").unwrap().to_string()).collect(),
+            };
+        }
+        _ => panic!("no regex match")
+    }
+}
 
-        let x = cap.name("x").unwrap().parse::<i32>().unwrap();
-        let y = cap.name("y").unwrap().parse::<i32>().unwrap();
-        result.push((x,y));
+struct State {
+    node: i64,
+    score: i64,
+    opened: [bool; 64],
+}
+
+fn bfs(graph: &HashMap<i64, (i64, Vec<i64>)>, start: i64, minutes: i64, opened: [bool; 64]) -> i64 {
+    let mut q: VecDeque<State> = VecDeque::new();
+    q.push_back(State { node: start, score: 0, opened });
+
+    let mut memo: HashMap<(i64, [bool; 64]), i64> = HashMap::new();
+
+    let mut result = 0i64;
+    for minute in (1..=minutes).rev() {
+        let qsize = q.len();
+        for _ in 0..qsize {
+            let cur = q.pop_front().unwrap();
+
+            if let Some(&cached) = memo.get(&(cur.node, cur.opened)) {
+                if cached >= cur.score {
+                    continue;
+                }
+            }
+            memo.insert((cur.node, cur.opened), cur.score);
+
+            result = result.max(cur.score);
+
+            if !cur.opened[cur.node as usize] {
+                let node = graph.get(&cur.node).unwrap();
+                if node.0 > 0 {
+                    let mut opened = cur.opened.clone();
+                    opened[cur.node as usize] = true;
+                    q.push_back(State { node: cur.node, score: &cur.score + (node.0 * (minute - 1)), opened });
+                }
+            }
+
+            for next in &graph.get(&cur.node).unwrap().1 {
+                q.push_back(State { node: *next, score: cur.score, opened: cur.opened });
+            }
+        }
     }
     result
 }
 
-fn drop_sand(walls: &mut HashSet<(i32, i32)>, lowest: i32) -> bool {
-    let mut sand = (0,500);
+struct Index {
+    size: i64,
+    map: HashMap<String, i64>,
+}
 
-    while sand.0 <= lowest {
-        if !walls.contains(&(sand.0 + 1, sand.1)) {
-            sand = (sand.0 + 1, sand.1);
-        } else if !walls.contains(&(sand.0 + 1, sand.1 - 1)) {
-            sand = (sand.0 + 1, sand.1 - 1);
-        } else if !walls.contains(&(sand.0 + 1, sand.1 + 1)) {
-            sand = (sand.0 + 1, sand.1 + 1);
-        } else {
-            walls.insert(sand);
-            return true;
+impl Index {
+    fn new() -> Index {
+        Index {
+            size: 0,
+            map: HashMap::new(),
         }
     }
-    false
+
+    fn get(&mut self, val: String) -> i64 {
+        if let Some(x) = self.map.get(&val) {
+            return *x;
+        }
+        let newidx = self.size;
+        self.map.insert(val, newidx);
+        self.size += 1;
+        return newidx;
+    }
 }
 
 fn part1() {
-    let lines = read_lines().into_iter().filter(|x| !x.is_empty()).collect::<Vec<String>>();
+    let mut index = Index::new();
+    let mut graph: HashMap<i64, (i64, Vec<i64>)> = HashMap::new();
 
-    let mut walls :HashSet<(i32, i32)> = HashSet::new();
-    for line in lines {
-        let positions = parse(line.as_str());
-        for i in 1..positions.len() {
-            let deltax = match positions[i-1].0.cmp(&positions[i].0) {
-                Ordering::Less => 1,
-                Ordering::Equal => 0,
-                Ordering::Greater => -1
-            };
-            let deltay = match positions[i-1].1.cmp(&positions[i].1) {
-                Ordering::Less => 1,
-                Ordering::Equal => 0,
-                Ordering::Greater => -1
-            };
-
-            let mut from = positions[i-1];
-            while from!=positions[i] {
-                walls.insert(from);
-                from = (from.0+deltax, from.1+deltay);
-            }
-            walls.insert(positions[i]);
+    {
+        let nodes: Vec<Node> = read_lines().iter().map(|x| parse(x)).collect();
+        for node in nodes {
+            graph.insert(index.get(node.from), (node.rate, node.tos.iter().map(|x| index.get(x.clone())).collect()));
         }
     }
 
-    let lowest = walls.iter().map(|x| x.0).reduce(|x,y| x.max(y)).unwrap();
-
-    let mut result = 0;
-    while drop_sand(&mut walls, lowest) {
-        result+=1;
-    }
-
+    let result = bfs(&graph, index.get("AA".to_string()), 30, [false; 64]);
     println!("Part1: {}", result);
 }
 
-fn drop_sand_2(walls: &mut HashSet<(i32, i32)>, base: i32) -> bool {
-    let mut sand = (0,500);
+fn find_pairs(graph: &HashMap<i64, (i64, Vec<i64>)>, start: i64, minutes: i64) -> HashMap<[bool;64], i64> {
+    let mut result = HashMap::new();
 
-    if walls.contains(&sand) {
-        return false;
+    let mut q: VecDeque<State> = VecDeque::new();
+    q.push_back(State { node: start, score: 0, opened: [false;64] });
+
+    let mut memo: HashMap<(i64, [bool; 64]), i64> = HashMap::new();
+
+    for minute in (1..=minutes).rev() {
+        let qsize = q.len();
+        for _ in 0..qsize {
+            let cur = q.pop_front().unwrap();
+
+            if let Some(&cached) = memo.get(&(cur.node, cur.opened)) {
+                if cached >= cur.score {
+                    continue;
+                }
+            }
+            memo.insert((cur.node, cur.opened), cur.score);
+
+            match result.get(&cur.opened) {
+                Some(x) => result.insert(cur.opened, cur.score.max(*x)),
+                None => result.insert(cur.opened, cur.score)
+            };
+
+            if !cur.opened[cur.node as usize] {
+                let node = graph.get(&cur.node).unwrap();
+                if node.0 > 0 {
+                    let mut opened = cur.opened.clone();
+                    opened[cur.node as usize] = true;
+                    q.push_back(State { node: cur.node, score: &cur.score + (node.0 * (minute - 1)), opened });
+                }
+            }
+
+            for next in &graph.get(&cur.node).unwrap().1 {
+                q.push_back(State { node: *next, score: cur.score, opened: cur.opened });
+            }
+        }
     }
 
-    while true {
-
-        if base == sand.0 + 1 {
-            walls.insert(sand);
-            return true;
-        }
-
-        if !walls.contains(&(sand.0 + 1, sand.1)) {
-            sand = (sand.0 + 1, sand.1);
-        } else if !walls.contains(&(sand.0 + 1, sand.1 - 1)) {
-            sand = (sand.0 + 1, sand.1 - 1);
-        } else if !walls.contains(&(sand.0 + 1, sand.1 + 1)) {
-            sand = (sand.0 + 1, sand.1 + 1);
-        } else {
-            walls.insert(sand);
-            return true;
-        }
-    }
-    false
+    result
 }
 
 fn part2() {
-    let lines = read_lines().into_iter().filter(|x| !x.is_empty()).collect::<Vec<String>>();
+    let mut index = Index::new();
+    let mut graph: HashMap<i64, (i64, Vec<i64>)> = HashMap::new();
 
-    let mut walls :HashSet<(i32, i32)> = HashSet::new();
-    for line in lines {
-        let positions = parse(line.as_str());
-        for i in 1..positions.len() {
-            let deltax = match positions[i-1].0.cmp(&positions[i].0) {
-                Ordering::Less => 1,
-                Ordering::Equal => 0,
-                Ordering::Greater => -1
-            };
-            let deltay = match positions[i-1].1.cmp(&positions[i].1) {
-                Ordering::Less => 1,
-                Ordering::Equal => 0,
-                Ordering::Greater => -1
-            };
-
-            let mut from = positions[i-1];
-            while from!=positions[i] {
-                walls.insert(from);
-                from = (from.0+deltax, from.1+deltay);
-            }
-            walls.insert(positions[i]);
+    {
+        let nodes: Vec<Node> = read_lines().iter().map(|x| parse(x)).collect();
+        for node in nodes {
+            graph.insert(index.get(node.from), (node.rate, node.tos.iter().map(|x| index.get(x.clone())).collect()));
         }
     }
 
-    let lowest = walls.iter().map(|x| x.0).reduce(|x,y| x.max(y)).unwrap();
+    let start_idx = index.get("AA".to_string());
+    let combinations = find_pairs(&graph, start_idx, 26);
 
-    let mut result = 0;
-    while drop_sand_2(&mut walls, lowest+2) {
-        result+=1;
+    let mut result = 0i64;
+    for comb in combinations {
+        let elephant = bfs(&graph, start_idx, 26, comb.0);
+        result = result.max(comb.1+elephant);
     }
 
     println!("Part2: {}", result);

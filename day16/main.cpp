@@ -84,20 +84,20 @@ namespace std {
     };
 }
 
-bool operator<(const std::bitset<16> &l, const std::bitset<16> &r) {
+bool operator<(const std::bitset<64> &l, const std::bitset<64> &r) {
     return l.to_ulong() < r.to_ulong();
 }
 
 struct State {
     int node = 0;
     int64_t score = 0;
-    std::bitset<16> opened;
+    std::bitset<64> opened;
 };
 
 int64_t bfs(const std::vector<std::vector<int>> &graph, const std::vector<int> &rates, int start, int minutes,
-            const std::bitset<16> &opened) {
+            const std::bitset<64> &opened) {
     int64_t result = 0;
-    std::unordered_map<std::pair<std::bitset<16>, int64_t>, int64_t> memo;
+    std::unordered_map<std::pair<std::bitset<64>, int64_t>, int64_t> memo;
     std::deque<State> q = {{start, 0, opened}};
     for (int i = minutes; i > 0; --i) {
         int size = q.size();
@@ -105,7 +105,7 @@ int64_t bfs(const std::vector<std::vector<int>> &graph, const std::vector<int> &
             const auto cur = q.front();
             q.pop_front();
 
-            std::pair<std::bitset<16>, int> key = {cur.opened, cur.node};
+            std::pair<std::bitset<64>, int> key = {cur.opened, cur.node};
             auto it = memo.find(key);
             if (it != memo.end() && it->second >= cur.score)
                 continue;
@@ -116,6 +116,7 @@ int64_t bfs(const std::vector<std::vector<int>> &graph, const std::vector<int> &
 
             if (!cur.opened[cur.node] && rates[cur.node] > 0) {
                 auto next = cur;
+                assert(cur.node<next.opened.size());
                 next.opened[cur.node] = true;
                 next.score += (rates[cur.node] * (i - 1));
                 q.push_back(next);
@@ -165,10 +166,10 @@ void part1() {
     std::cout << "Part1: " << result << std::endl;
 }
 
-std::map<std::bitset<16>, int64_t>
+std::map<std::bitset<64>, int64_t>
 find_pairs(const std::vector<std::vector<int>> &graph, const std::vector<int> &rates, int start, int minutes) {
-    std::map<std::bitset<16>, int64_t> result;
-    std::unordered_map<std::pair<std::bitset<16>, int64_t>, int64_t> memo;
+    std::map<std::bitset<64>, int64_t> result;
+    std::unordered_map<std::pair<std::bitset<64>, int64_t>, int64_t> memo;
     std::deque<State> q = {{start, 0, {}}};
     for (int i = minutes; i > 0; --i) {
         int size = q.size();
@@ -176,7 +177,7 @@ find_pairs(const std::vector<std::vector<int>> &graph, const std::vector<int> &r
             const auto cur = q.front();
             q.pop_front();
 
-            std::pair<std::bitset<16>, int> key = {cur.opened, cur.node};
+            std::pair<std::bitset<64>, int> key = {cur.opened, cur.node};
             auto it = memo.find(key);
             if (it != memo.end() && it->second >= cur.score)
                 continue;
