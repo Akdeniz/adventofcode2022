@@ -109,17 +109,19 @@ auto parse() {
 }
 
 auto execute(const std::unordered_set<std::pair<int, int>>& elves, const std::array<char,4> &proposal_order) {
+    std::unordered_map<std::pair<int, int>, std::pair<int,int>> proposals;
     std::unordered_map<std::pair<int, int>, int> proposal_count;
 
     for (const auto &elf: elves) {
         auto proposal = find_proposal(elves, elf, proposal_order);
+        proposals[elf] = proposal;
         proposal_count[proposal]++;
     }
 
     int number_of_changes = 0;
     std::unordered_set<std::pair<int, int>> newpositions;
     for (const auto &elf: elves) {
-        auto proposal = find_proposal(elves, elf, proposal_order);
+        const auto& proposal = proposals[elf];
         if (proposal_count[proposal] == 1) {
             newpositions.insert(proposal);
             if(elf!=proposal) ++number_of_changes;
